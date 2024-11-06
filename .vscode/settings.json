@@ -1,0 +1,9 @@
+{
+  "cSpell.words": [
+    "dotenv",
+    "itsdangerous",
+    "jsonify",
+    "sqlalchemy",
+    "werkzeug"
+  ]
+}
