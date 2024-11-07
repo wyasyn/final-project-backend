@@ -1,26 +1,39 @@
+import logging
 from src import create_app
-from src.users.routes import user_bp
-from src.income.routes import income_bp
-from src.expense.routes import expense_bp
-from src.budget.routes import budget_bp
-from src.savings_goal.routes import savings_goal_bp
 from flask import jsonify
-from flask_cors import CORS
+import os
 
+# Initialize the application
 app = create_app()
 
-CORS(app) 
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("personal_assistant_api")
+logger.info("Starting the personal assistant API...")
 
-@app.get("/")
+@app.route("/", methods=["GET"])
 def hello():
-    return jsonify({"message": "Welcome to the personal assistant api."})
+    """Root endpoint to verify API is running."""
+    try:
+        logger.info("Root endpoint accessed")
+        return jsonify({"message": "Welcome to the personal assistant API."}), 200
+    except Exception as e:
+        logger.error(f"An error occurred at root endpoint: {e}", exc_info=True)
+        return jsonify({"error": "Internal Server Error"}), 500
 
-# Register blueprints
-app.register_blueprint(user_bp, url_prefix='/user')
-app.register_blueprint(income_bp, url_prefix='/income')
-app.register_blueprint(expense_bp, url_prefix='/expense')
-app.register_blueprint(budget_bp, url_prefix='/budget')
-app.register_blueprint(savings_goal_bp, url_prefix='/savings-goal')
+@app.errorhandler(404)
+def page_not_found(e):
+    """Handle 404 errors with a JSON response."""
+    logger.warning("404 error - Page not found")
+    return jsonify({"error": "Endpoint not found"}), 404
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    """Handle 500 errors with a JSON response."""
+    logger.error("500 error - Internal server error", exc_info=True)
+    return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=5000, debug=debug_mode)
+
