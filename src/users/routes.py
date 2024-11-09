@@ -59,15 +59,18 @@ def login():
     if not identifier or not password:
         return jsonify({'error': 'Identifier and password are required'}), 400
 
-    user = user_exists(identifier)
+    try:
+        user = user_exists(identifier)
+        if user and user.check_password(password):
+            access_token = create_access_token(identity=user.id, expires_delta=timedelta(days=7))
+            response = make_response(jsonify({'message': 'Login successful'}), 200)
+            set_access_cookies(response, access_token)
+            return response
 
-    if user and user.check_password(password): 
-        access_token = create_access_token(identity=user.id, expires_delta=timedelta(days=7))
-        response = make_response(jsonify({'message': 'Login successful'}), 200)
-        set_access_cookies(response, access_token)
-        return response
+        return jsonify({'error': 'Invalid identifier or password'}), 401
 
-    return jsonify({'error': 'Invalid identifier or password'}), 401
+    except Exception as e:
+        return jsonify({'error': 'An error occurred during login', 'details': str(e)}), 500
 
 
 

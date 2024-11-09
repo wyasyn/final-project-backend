@@ -4,8 +4,5 @@ python-dotenv
 flask_cors
 Flask-JWT-Extended
 itsdangerous
-Flask-Mail
-flask_limiter
-redis
 resend
-Flask-Mailman
+psycopg2-binary
