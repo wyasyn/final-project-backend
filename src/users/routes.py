@@ -1,12 +1,12 @@
 from flask import request, jsonify, url_for, Blueprint, make_response, current_app
-from src import mail, db
+from src import db
 from src.models import User
-from flask_mail import Message
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity, set_access_cookies
 )
 from datetime import datetime, timedelta
+from src.utils.email import send_email
 
 
 user_bp = Blueprint('user_bp', __name__)
@@ -108,43 +108,65 @@ def delete_user():
         db.session.rollback()
         return jsonify({"error": "An error occurred while deleting the user"}), 500
 
+# Route for initiating the password reset process
 @user_bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
+    """Handle password reset request."""
     data = request.get_json()
     email = data.get('email')
     user = User.query.filter_by(email=email).first()
 
     if user:
         try:
-            token = user.get_reset_password_token()  # Using model's method
-            reset_url = url_for('user_bp.reset_password', token=token, _external=True)
+            # Generate the token using the model's method
+            token = user.get_reset_password_token()
 
-            msg = Message("Password Reset Request", recipients=[email])
-            msg.body = f'Click the link to reset your password: {reset_url}'
-            mail.send(msg)
+            # Construct the reset URL for the Next.js frontend
+            frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3000')
+            reset_url = f"{frontend_url}/reset-password?token={token}"
+
+            # Send the reset email
+            send_email(email, reset_url)
+            return jsonify({'message': 'If the email exists, a reset link has been sent.'}), 200
         except Exception as e:
-            return jsonify({'message': 'Failed to send email', 'details': str(e)}), 500
+            current_app.logger.error(f"Failed to send reset email: {e}")
+            return jsonify({'error': 'Failed to send email'}), 500
 
+    # Always return a generic message for security reasons
     return jsonify({'message': 'If the email exists, a reset link has been sent.'}), 200
 
+
+# Route for resetting the password
 @user_bp.route('/reset-password/<token>', methods=['POST'])
 def reset_password(token):
+    """Reset the password using a valid token."""
     try:
-        email = User.verify_reset_password_token(token)  # Using model's method
-    except Exception:
-        return jsonify({'error': 'Invalid or expired token'}), 400
+        # Verify the token and retrieve the user
+        user = User.verify_reset_password_token(token)
+        
+        if user is None:
+            return jsonify({'error': 'Invalid or expired token'}), 400
 
-    data = request.get_json()
-    new_password = data.get('password')
-    if not new_password:
-        return jsonify({'error': 'Password is required'}), 400
+        # Extract the new password from request data
+        data = request.get_json()
+        new_password = data.get('password')
+        
+        if not new_password:
+            return jsonify({'error': 'Password is required'}), 400
 
-    user = User.query.filter_by(email=email).first()
-    if user:
-        user.set_password(new_password)  # Using model's method
+        # Set and commit the new password
+        user.set_password(new_password)
         db.session.commit()
+        
         return jsonify({'message': 'Password updated successfully'}), 200
-    return jsonify({'error': 'User not found'}), 404
+    except ValueError as e:
+        # Handle specific token errors (expired, invalid)
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error during password reset: {e}")
+        return jsonify({'error': 'An error occurred while resetting the password'}), 500
+
+
 
 
 

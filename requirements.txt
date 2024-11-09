@@ -7,3 +7,5 @@ itsdangerous
 Flask-Mail
 flask_limiter
 redis
+resend
+Flask-Mailman

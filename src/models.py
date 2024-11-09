@@ -1,7 +1,10 @@
 from src import db
 from sqlalchemy import func
+from flask import current_app
 from werkzeug.security import generate_password_hash, check_password_hash
-
+from itsdangerous import SignatureExpired
+from flask import current_app
+from typing import Dict
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -25,16 +28,16 @@ class User(db.Model):
     budgets = db.relationship('Budget', backref='user', lazy=True)
     savings_goals = db.relationship('SavingsGoal', backref='user', lazy=True)
 
-    def set_password(self, password):
-        """Generate password hash."""
+    def set_password(self, password: str) -> None:
+        """Hashes and sets the password for the user."""
         self.password_hash = generate_password_hash(password)
 
-    def check_password(self, password):
-        """Check password hash."""
+    def check_password(self, password: str) -> bool:
+        """Checks the password against the stored hash."""
         return check_password_hash(self.password_hash, password)
 
-    def to_dict(self):
-        """Convert User instance to a dictionary."""
+    def to_dict(self) -> Dict[str, str]:
+        """Returns a dictionary representation of the user."""
         return {
             'id': self.id,
             'first_name': self.first_name,
@@ -46,9 +49,33 @@ class User(db.Model):
             'created_at': self.created_at
         }
 
-    def __repr__(self):
-        return f'<User {self.username} ({self.email})>'
+    
+    def get_reset_password_token(self):
+        """Generate a password reset token."""
+        try:
+            # Generate token with unique user_id
+            return current_app.serializer.dumps({'user_id': self.id}, salt='reset-password')
+        except Exception as e:
+            current_app.logger.error(f"Error generating token: {e}")
+            raise
 
+
+    @staticmethod
+    def verify_reset_password_token(token):
+        """Verify the password reset token."""
+        try:
+            # Load the token with a 10-minute expiration
+            data = current_app.serializer.loads(token, salt='reset-password', max_age=600)
+            return User.query.get(data['user_id'])
+        except SignatureExpired:
+            current_app.logger.warning("Token expired.")
+            raise ValueError("The token has expired.")
+        except Exception as e:
+            current_app.logger.error(f"Error verifying token: {e}")
+            raise ValueError("Invalid token.")
+
+    def __repr__(self) -> str:
+        return f"<User {self.username} ({self.email})>"
 
 class Income(db.Model):
     __tablename__ = 'incomes'
@@ -59,8 +86,8 @@ class Income(db.Model):
     amount = db.Column(db.Float, nullable=False)
     date = db.Column(db.Date, default=func.now(), nullable=False)
 
-    def to_dict(self):
-        """Convert Income instance to a dictionary."""
+    def to_dict(self) -> Dict[str, str]:
+        """Returns a dictionary representation of the income entry."""
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -69,9 +96,8 @@ class Income(db.Model):
             'date': self.date
         }
 
-    def __repr__(self):
-        return f'<Income {self.source}: {self.amount}>'
-
+    def __repr__(self) -> str:
+        return f"<Income {self.source}: {self.amount}>"
 
 class Expense(db.Model):
     __tablename__ = 'expenses'
@@ -83,8 +109,8 @@ class Expense(db.Model):
     amount = db.Column(db.Float, nullable=False)
     date = db.Column(db.Date, default=func.now(), nullable=False)
 
-    def to_dict(self):
-        """Convert Expense instance to a dictionary."""
+    def to_dict(self) -> Dict[str, str]:
+        """Returns a dictionary representation of the expense entry."""
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -94,9 +120,8 @@ class Expense(db.Model):
             'date': self.date
         }
 
-    def __repr__(self):
-        return f'<Expense {self.category}: {self.amount}>'
-
+    def __repr__(self) -> str:
+        return f"<Expense {self.category}: {self.amount}>"
 
 class Budget(db.Model):
     __tablename__ = 'budgets'
@@ -108,8 +133,8 @@ class Budget(db.Model):
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
 
-    def to_dict(self):
-        """Convert Budget instance to a dictionary."""
+    def to_dict(self) -> Dict[str, str]:
+        """Returns a dictionary representation of the budget entry."""
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -119,9 +144,8 @@ class Budget(db.Model):
             'end_date': self.end_date
         }
 
-    def __repr__(self):
-        return f'<Budget {self.category}: {self.amount}>'
-
+    def __repr__(self) -> str:
+        return f"<Budget {self.category}: {self.amount}>"
 
 class SavingsGoal(db.Model):
     __tablename__ = 'savings_goals'
@@ -134,12 +158,12 @@ class SavingsGoal(db.Model):
     deadline = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=func.now(), nullable=False)
 
-    def calculate_progress(self):
-        """Calculate progress towards the savings goal."""
-        return (self.current_amount / self.target_amount) * 100 if self.target_amount else 0
+    def calculate_progress(self) -> float:
+        """Calculates the progress towards the savings goal as a percentage."""
+        return (self.current_amount / self.target_amount * 100) if self.target_amount else 0
 
-    def to_dict(self):
-        """Convert SavingsGoal instance to a dictionary."""
+    def to_dict(self) -> Dict[str, str]:
+        """Returns a dictionary representation of the savings goal."""
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -151,5 +175,5 @@ class SavingsGoal(db.Model):
             'progress': self.calculate_progress()
         }
 
-    def __repr__(self):
-        return f'<SavingsGoal {self.goal_name}: Target={self.target_amount}, Current={self.current_amount}>'
+    def __repr__(self) -> str:
+        return f"<SavingsGoal {self.goal_name}: Target={self.target_amount}, Current={self.current_amount}>"

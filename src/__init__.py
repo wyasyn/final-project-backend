@@ -1,12 +1,10 @@
-# src/__init__.py
-
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
-from flask_mail import Mail
 from flask_cors import CORS
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer
+
 import os
 import logging
 
@@ -15,29 +13,24 @@ load_dotenv()
 
 # Initialize extensions globally
 db = SQLAlchemy()
-mail = Mail()
 jwt = JWTManager()
+
 
 class Config:
     """Centralized configuration class for all app settings."""
     SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI')
     SECRET_KEY = os.getenv('SECRET_KEY', 'default-secret-key')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'default-jwt-secret-key')
-    MAIL_USERNAME = os.getenv("MAIL_USERNAME")
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.getenv("MAIL_USERNAME")
-    MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
     SQLALCHEMY_TRACK_MODIFICATIONS = False  
 
 def create_app():
     """Application factory to create and configure the Flask app."""
     app = Flask(__name__)
-    app.config.from_object(Config)  # Load configurations from Config class
+    
+    app.config.from_object(Config)  
     
     # Enable CORS with app-specific configuration if needed
-    CORS(app)
+    CORS(app, origins=["http://localhost:3000", "https://yourfrontend.com"])
 
     # Initialize extensions with the app
     initialize_extensions(app)
@@ -61,7 +54,6 @@ def initialize_extensions(app):
     """Initialize Flask extensions with the app instance."""
     db.init_app(app)
     jwt.init_app(app)
-    mail.init_app(app)
 
 def register_blueprints(app):
     """Register Flask blueprints for modular routing."""
