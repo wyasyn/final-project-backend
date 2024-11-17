@@ -1,3 +1,4 @@
 .virt
 instance
 .env
+migrations

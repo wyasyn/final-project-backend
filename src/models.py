@@ -1,10 +1,12 @@
 from src import db
 from sqlalchemy import func
+from sqlalchemy import CheckConstraint
 from flask import current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import SignatureExpired
 from flask import current_app
 from typing import Dict
+from datetime import date as DateType 
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -23,10 +25,9 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=func.now(), nullable=False)
 
     # Relationships
-    incomes = db.relationship('Income', backref='user', lazy=True)
-    expenses = db.relationship('Expense', backref='user', lazy=True)
-    budgets = db.relationship('Budget', backref='user', lazy=True)
-    savings_goals = db.relationship('SavingsGoal', backref='user', lazy=True)
+    transactions = db.relationship('Transaction', backref='user', lazy=True, cascade="all, delete")
+    budgets = db.relationship('Budget', backref='user', lazy=True, cascade="all, delete")
+    savings_goals = db.relationship('SavingsGoal', backref='user', lazy=True, cascade="all, delete")
 
     def set_password(self, password: str) -> None:
         """Hashes and sets the password for the user."""
@@ -78,54 +79,51 @@ class User(db.Model):
     def __repr__(self) -> str:
         return f"<User {self.username} ({self.email})>"
 
-class Income(db.Model):
-    __tablename__ = 'incomes'
+
+class Transaction(db.Model):
+    __tablename__ = 'transactions'
+    __table_args__ = (
+        CheckConstraint('amount >= 0', name='check_positive_transaction_amount'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    source = db.Column(db.String(100), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    date = db.Column(db.Date, default=func.now(), nullable=False)
-
-    def to_dict(self) -> Dict[str, str]:
-        """Returns a dictionary representation of the income entry."""
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'source': self.source,
-            'amount': self.amount,
-            'date': self.date
-        }
-
-    def __repr__(self) -> str:
-        return f"<Income {self.source}: {self.amount}>"
-
-class Expense(db.Model):
-    __tablename__ = 'expenses'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    category = db.Column(db.String(100), nullable=False)
+    transaction_type = db.Column(db.Enum('income', 'expense', name='transaction_type'), nullable=False)
     description = db.Column(db.String(255), nullable=True)
     amount = db.Column(db.Float, nullable=False)
     date = db.Column(db.Date, default=func.now(), nullable=False)
 
     def to_dict(self) -> Dict[str, str]:
-        """Returns a dictionary representation of the expense entry."""
+        """Returns a dictionary representation of the transaction entry."""
         return {
             'id': self.id,
             'user_id': self.user_id,
-            'category': self.category,
+            'transaction_type': self.transaction_type,
             'description': self.description,
             'amount': self.amount,
             'date': self.date
         }
+    
+    @staticmethod
+    def filter_transactions(user_id: int, transaction_type: str = None, start_date: DateType = None, end_date: DateType = None):
+        query = Transaction.query.filter_by(user_id=user_id)
+        if transaction_type:
+            query = query.filter_by(transaction_type=transaction_type)
+        if start_date and end_date:
+            query = query.filter(Transaction.date.between(start_date, end_date))
+        return query.all()
+
+
 
     def __repr__(self) -> str:
-        return f"<Expense {self.category}: {self.amount}>"
+        return f"<Transaction {self.transaction_type} - {self.amount}: {self.description or 'No description'}>"
+
 
 class Budget(db.Model):
     __tablename__ = 'budgets'
+    __table_args__ = (
+        CheckConstraint('amount >= 0', name='check_positive_transaction_amount'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -144,6 +142,17 @@ class Budget(db.Model):
             'start_date': self.start_date,
             'end_date': self.end_date
         }
+    
+    def calculate_remaining_budget(self, transactions: list) -> float:
+        """Calculate the remaining budget based on related transactions."""
+        total_expenses = sum(t.amount for t in transactions if t.category == self.category and self.start_date <= t.date <= self.end_date)
+        return self.amount - total_expenses
+    @staticmethod
+    def validate_dates(start_date, end_date):
+        if start_date >= end_date:
+            raise ValueError("Start date must be before end date.")
+
+
 
     def __repr__(self) -> str:
         return f"<Budget {self.category}: {self.amount}>"
@@ -175,6 +184,20 @@ class SavingsGoal(db.Model):
             'created_at': self.created_at,
             'progress': self.calculate_progress()
         }
+    def deposit(self, amount: float) -> None:
+        if amount <= 0:
+            raise ValueError("Deposit amount must be positive.")
+        self.current_amount += amount
+        db.session.add(self)
+        db.session.commit()
+
+
+    
+    @staticmethod
+    def validate_dates(start_date, end_date):
+        if start_date >= end_date:
+            raise ValueError("Start date must be before end date.")
+
 
     def __repr__(self) -> str:
         return f"<SavingsGoal {self.goal_name}: Target={self.target_amount}, Current={self.current_amount}>"

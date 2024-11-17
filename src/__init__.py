@@ -1,3 +1,4 @@
+from flask_migrate import Migrate
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
@@ -14,6 +15,7 @@ load_dotenv()
 # Initialize extensions globally
 db = SQLAlchemy()
 jwt = JWTManager()
+migrate = Migrate()
 
 
 class Config:
@@ -54,22 +56,22 @@ def initialize_extensions(app):
     """Initialize Flask extensions with the app instance."""
     db.init_app(app)
     jwt.init_app(app)
+    migrate.init_app(app, db)
 
 def register_blueprints(app):
     """Register Flask blueprints for modular routing."""
     # Import blueprints inside the function to avoid circular imports
     from .users.routes import user_bp
-    from .income.routes import income_bp
-    from .expense.routes import expense_bp
+    from .transaction.routes import transaction_bp  
     from .budget.routes import budget_bp
     from .savings_goal.routes import savings_goal_bp
 
     # Register each blueprint with a URL prefix
     app.register_blueprint(user_bp, url_prefix='/user')
-    app.register_blueprint(income_bp, url_prefix='/income')
-    app.register_blueprint(expense_bp, url_prefix='/expense')
+    app.register_blueprint(transaction_bp, url_prefix='/transaction') 
     app.register_blueprint(budget_bp, url_prefix='/budget')
     app.register_blueprint(savings_goal_bp, url_prefix='/savings-goal')
+
 
 def initialize_database(app):
     """Initialize database and create tables if they don't exist."""

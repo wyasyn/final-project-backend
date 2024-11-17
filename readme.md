@@ -23,3 +23,27 @@ Run app
 ```bash
 python3 -m src.app
 ```
+
+init db
+
+```bash
+flask db init
+```
+
+set flask app env variable
+
+```bash
+export FLASK_APP=src.app
+```
+
+run migration
+
+```bash
+flask db migrate -m "message"
+```
+
+update database
+
+```bash
+flask db upgrade
+```
